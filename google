@@ -1,0 +1,361 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2008 Henri Hakkinen
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import termios, fcntl, struct
+import webbrowser
+import HTMLParser
+import operator
+import re
+
+from urllib import quote_plus
+from httplib import HTTPConnection
+from getopt import getopt, GetoptError
+
+# Global variables
+columns  = None    # Terminal window size.
+start    = None    # The first result to display (option -s)
+num      = None    # Number of results to display (option -n)
+lang     = None    # Language to search for (option -l)
+openUrl  = False   # If True, opens the first URL in browser (option -j)
+colorize = False   # If True, colorizes the output (option -C)
+
+
+word_length = 1
+key_word = ""
+title_hash = {}
+pattern_match = []
+rm_word_list = ['','in','at','a','is','was','the','to','from','of','on','and','-','|','an','by','for']
+pattern = ["*** and ","*** is ","***- "]
+frequent_pattern_list = {}
+# Classes
+class GoogleParser(HTMLParser.HTMLParser):
+    def __init__(self):
+        HTMLParser.HTMLParser.__init__(self)
+        self.handle_starttag = self.main_start
+        self.handle_data = self.main_data
+        self.handle_endtag = self.main_end
+    def main_start(self, tag, attrs):
+        if tag == "li" and len(attrs) > 0 and attrs[0] == ("class", "g"):
+            self.title = ""
+            self.url   = ""
+            self.text  = ""
+            self.handle_starttag = self.li_start
+            self.handle_data = self.li_data
+            self.handle_endtag = self.li_end
+    def main_data(self, data):
+        pass
+    def main_end(self, tag):
+        pass
+    # <li class="g"> ... </li>
+    def li_start(self, tag, attrs):
+        if tag == "h3":
+            self.handle_starttag = self.h3_start
+            self.handle_data = self.h3_data
+            self.handle_endtag = self.h3_end
+        elif tag == "div":
+            self.handle_starttag = self.div_start
+            self.handle_data = self.div_data
+            self.handle_endtag = self.div_end
+    def li_data(self, data):
+        pass
+    def li_end(self, tag):
+        if tag == "div":
+            print_entry(self.title, self.url, self.text)
+            self.handle_starttag = self.main_start
+            self.handle_data = self.main_data
+            self.handle_endtag = self.main_end
+    # <h3> ... </h3>
+    def h3_start(self, tag, attrs):
+        if tag == "a":
+            self.url = attrs[0][1]
+    def h3_data(self, data):
+        self.title += data
+    def h3_end(self, tag):
+        if tag == "h3": 
+            self.handle_starttag = self.li_start
+            self.handle_data = self.li_data
+            self.handle_endtag = self.li_end
+    # <div> ... </div>
+    def div_start(self, tag, start):
+        if tag == "br":
+            self.handle_starttag = self.li_start
+            self.handle_data = self.li_data
+            self.handle_endtag = self.li_end
+    def div_data(self, data):
+        self.text += data
+    def div_end(self, tag):
+        pass
+
+# Functions
+
+def init_pattern():
+    global pattern
+    dum_list = []
+    for x in pattern:
+	dum_list.append(x.replace("***",key_word))
+    pattern = dum_list;
+    print pattern
+
+def match_pattern(input):
+    for x in pattern:
+	if (x in input):
+		pattern_match.append(input)
+		return
+
+def clean_input(input):
+    line = re.sub('[. !,$@|:]','',input)
+    return line
+
+
+def rm_useless_word(input):
+#    useless_word_list = ['the','a'];
+   global rm_word_list
+   if input in rm_word_list:
+	return True
+   return False
+
+def check_frequency(word_list):
+    global word_length
+    global frequent_pattern_list
+    if word_length <=1:
+	return True
+    else:
+	check_hash = frequent_pattern_list[word_length-1]
+	for word in word_list:
+		t = (clean_input(word)).lower()
+                #print "t is :" + t
+    #            print "word in check frequency is " + t
+		if t not in check_hash:
+                 #       print "not in check_hash:" + t
+			return False
+        return True
+
+def hash_title(title):
+    global word_length
+    word_list = title.split()
+    for i in range(0,len(word_list)):
+	#print "word is " + word
+        word = word_list[i:i+word_length]
+        #print "word list in hash_title"
+        #print word
+        if check_frequency(word) == False:
+		continue
+        else:
+		clean_word_list = []
+		flag = 0
+                for x in word:
+			c = (clean_input(x)).lower()
+			if rm_useless_word(c) == True:
+				flag = 1
+			else:
+				clean_word_list.append(c)
+		if flag == 1:
+			continue	
+ 		final = " ".join(clean_word_list)
+        	#if word_length > 1:
+		#	print "Found:" + final
+		if final in title_hash:
+			title_hash[final] +=1
+		else:
+			title_hash[final] = 1
+
+def limit_hash():
+#    stop_index = 0
+    stored_key = []
+ #   sort_x = sorted(title_hash.items(),key = operator.itemgetter(1))
+    #print sort_x
+    #print "before limit hash:"
+    #print title_hash
+    for key in title_hash:
+	if title_hash[key] < 3:
+		stored_key.append(key)
+
+    for key in stored_key:
+	title_hash.pop(key,None)
+#    print title_hash
+"""
+    for i in range(0,len(sort_x)):
+	#print sort_x[i][1]
+	if sort_x[i][1] > 2:
+		stop_index = i
+		break
+	#	rm_list.append(i);
+    for i in range(0,stop_index):
+	sort_x.pop(0)
+"""   
+#print sort_x
+#   print "rm_list is:"
+#   print rm_list
+def parse_general_html():
+    return ""
+
+def pattern_mining():
+    return ""
+
+def overlapping_word_list():
+    return ""
+
+def parse_google_html(parser,content):
+    global word_length
+    global title_hash
+    print "begin parse with word_length = %d!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1" % (word_length)
+    parser.feed(content)
+    limit_hash()
+    frequent_pattern_list[word_length] = title_hash
+    title_hash = {}
+"""
+    for key in title_hash:
+	if title_hash[key] > 1:
+		print "key is %s, value is %s" %(key,title_hash[key])
+    sort_x = sorted(title_hash.items(),key = operator.itemgetter(1))
+"""   
+#    print sort_x
+
+def print_entry(title, url, text):
+    # Open the URL in a web browser if option -j was specified.
+    if openUrl:
+        webbrowser.open(url)
+        sys.exit(0)
+    # Print the title and the URL.
+    if colorize:
+        print "\x1B[96m* \x1B[92m%s\n\x1B[93m%s\x1B[39m" % (title, url)
+    else:
+        try:
+   #     	print "Title:* %s\n%s" % (title, url)
+#		print "Begin breaking title into list"
+		hash_title(title);
+                match_pattern(text.lower())
+#		print "End breaking title ======================="
+	except:
+		print "Error happens in print statement"
+    # Print the text with truncating.
+    print url
+    col = 0
+    #print "Text:" + text
+    hash_title(text)
+    match_pattern(text.lower())
+  #  print "===============================================\n\n"
+"""
+    for w in text.split():
+        if (col + len(w) + 1) > columns:
+            col = 0
+            print
+        print w,
+        col += len(w) + 1
+    print
+    print
+"""
+def usage():
+    print "Usage: google [OPTIONS] KEYWORDS..."
+    print "Performs a Google search and prints the results to stdout.\n"
+    print "Options"
+    print "  -s N     start at the Nth result"
+    print "  -n N     show N results"
+    print "  -l LANG  display in language LANG, such as fi for Finnish"
+    print "  -C       enable color output"
+    print "  -j       open the first result in a web browser\n"
+    print "Copyright (C) 2008 Henri Hakkinen."
+    print "Report bugs to <henux@users.sourceforge.net>."
+    sys.exit(1)
+
+########### Program Main
+
+# Process command line options.
+optlist = None
+keywords = None
+
+if len(sys.argv) < 2:
+    usage()
+
+try:
+    optlist, keywords = getopt(sys.argv[1:], "s:n:l:Cj")
+    for opt in optlist:
+        if opt[0] == "-s":
+            # Option -s N
+            if not opt[1].isdigit():
+                print "google: option -s needs an integer"
+                sys.exit(1)
+            start = opt[1]
+        elif opt[0] == "-n":
+            # Option -n N
+            if not opt[1].isdigit():
+                print "google: option -n needs an integer"
+                sys.exit(1)
+            num = opt[1]
+        elif opt[0] == "-l":
+            # Option -l LANG
+            lang = opt[1]
+        elif opt[0] == "-C":
+            # Option -C
+            colorize = True
+        elif opt[0] == "-j":
+            # Option -j
+            openUrl = True
+    if len(keywords) < 1:
+        usage()
+except GetoptError, e:
+    print "google:", e
+    sys.exit(1)
+
+# Construct the query URL.
+url = "/search?"
+
+if start != None:
+    url += "start=" + start + "&"
+if num != None:
+    url += "num=" + num + "&"
+if lang != None:
+    url += "hl=" + lang + "&"
+
+url += "q=" + quote_plus(keywords[0])
+for kw in keywords[1:]:
+    url += "+" + quote_plus(kw)
+
+key_word = ' '.join(keywords)
+init_pattern()
+
+if not openUrl:
+    print "\nhttp://www.google.com%s\n" % url
+
+# Get the terminal window size.
+winsz = fcntl.ioctl(sys.stdout, termios.TIOCGWINSZ, "1234")
+columns = struct.unpack("HH", winsz)[1]
+
+# Connect to Google and request the result page.
+conn = HTTPConnection("www.google.com")
+conn.request("GET", url)
+resp = conn.getresponse()
+if resp.status != 200:
+    # The server responded with an error.
+    print "Server responded with an error:", str(resp.status)
+    sys.exit(1)
+
+# Parse the HTML document and print the results.
+save = resp.read()
+parser = GoogleParser()
+parse_google_html(parser,save)
+word_length +=1
+#print check_frequency(['roger','federer'])
+parse_google_html(parser,save)
+print frequent_pattern_list
+#parser.feed(resp.read())
+conn.close()
+#print "key word is " + ' '.join( keywords)
+#print_title_hash()
+#print pattern_match
+# vim:set sts=4 sw=4 et:
