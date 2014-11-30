@@ -25,7 +25,10 @@ import re
 from urllib import quote_plus
 from httplib import HTTPConnection
 from getopt import getopt, GetoptError
-
+#from HTMLParser import HTMLParser
+import sys
+reload(sys)
+sys.setdefaultencoding("utf-8")
 # Global variables
 columns  = None    # Terminal window size.
 start    = None    # The first result to display (option -s)
@@ -34,14 +37,14 @@ lang     = None    # Language to search for (option -l)
 openUrl  = False   # If True, opens the first URL in browser (option -j)
 colorize = False   # If True, colorizes the output (option -C)
 
-
 word_length = 1
 key_word = ""
 title_hash = {}
 pattern_match = []
 rm_word_list = ['','in','at','a','is','was','the','to','from','of','on','and','-','|','an','by','for']
-pattern = ["*** and ","*** is ","***- "]
+pattern = ["*** and ","*** is ", "*** was","*** were"]
 frequent_pattern_list = {}
+
 # Classes
 class GoogleParser(HTMLParser.HTMLParser):
     def __init__(self):
@@ -75,7 +78,7 @@ class GoogleParser(HTMLParser.HTMLParser):
         pass
     def li_end(self, tag):
         if tag == "div":
-            print_entry(self.title, self.url, self.text)
+            parse_google_entry(self.title, self.url, self.text)
             self.handle_starttag = self.main_start
             self.handle_data = self.main_data
             self.handle_endtag = self.main_end
@@ -101,14 +104,57 @@ class GoogleParser(HTMLParser.HTMLParser):
     def div_end(self, tag):
         pass
 
-# Functions
+class MLStripper(HTMLParser.HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
 
+def strip_tags(html):
+    s = MLStripper()
+    s.feed(html)
+    return s.get_data()
+
+# Functions
+def rm_empty_lines(txt):
+    while '\n\n' in txt:
+        txt=txt.replace('\n\n','\n')
+    return txt
+
+def rm_line_if_length_is_short(txt):
+    list_txt = txt.split('\n')
+    new = []
+    for ele in list_txt:
+	if len(ele) > 40:	
+		new.append(ele)
+    new_txt = "\n".join(new)
+    return new_txt
+
+def read_web_page(url):
+    import urllib
+    conn = urllib.urlopen(url)
+    html = conn.read()
+    #print html
+    text = strip_tags(html)
+    #filtered = filter(lambda x: not re.match(r'^\s*$', x),text)
+    filtered = rm_empty_lines(text)
+    filtered = rm_line_if_length_is_short(filtered)
+    #print filtered[0:20000]
+    print "[read_web_page]The length of useful info is " + str(len(filtered))
+    
 def init_pattern():
     global pattern
     dum_list = []
     for x in pattern:
 	dum_list.append(x.replace("***",key_word))
-    pattern = dum_list;
+    if len(keywords) >=2:
+        for word in keywords:
+		for x in pattern:
+			dum_list.append(x.replace("***",word))
+    pattern = dum_list
     print pattern
 
 def match_pattern(input):
@@ -187,20 +233,7 @@ def limit_hash():
 
     for key in stored_key:
 	title_hash.pop(key,None)
-#    print title_hash
-"""
-    for i in range(0,len(sort_x)):
-	#print sort_x[i][1]
-	if sort_x[i][1] > 2:
-		stop_index = i
-		break
-	#	rm_list.append(i);
-    for i in range(0,stop_index):
-	sort_x.pop(0)
-"""   
-#print sort_x
-#   print "rm_list is:"
-#   print rm_list
+
 def parse_general_html():
     return ""
 
@@ -213,20 +246,12 @@ def overlapping_word_list():
 def parse_google_html(parser,content):
     global word_length
     global title_hash
-    print "begin parse with word_length = %d!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1" % (word_length)
     parser.feed(content)
     limit_hash()
     frequent_pattern_list[word_length] = title_hash
     title_hash = {}
-"""
-    for key in title_hash:
-	if title_hash[key] > 1:
-		print "key is %s, value is %s" %(key,title_hash[key])
-    sort_x = sorted(title_hash.items(),key = operator.itemgetter(1))
-"""   
-#    print sort_x
 
-def print_entry(title, url, text):
+def parse_google_entry(title, url, text):
     # Open the URL in a web browser if option -j was specified.
     if openUrl:
         webbrowser.open(url)
@@ -236,30 +261,13 @@ def print_entry(title, url, text):
         print "\x1B[96m* \x1B[92m%s\n\x1B[93m%s\x1B[39m" % (title, url)
     else:
         try:
-   #     	print "Title:* %s\n%s" % (title, url)
-#		print "Begin breaking title into list"
 		hash_title(title);
-                match_pattern(text.lower())
-#		print "End breaking title ======================="
+                match_pattern(title.lower())
 	except:
 		print "Error happens in print statement"
-    # Print the text with truncating.
-    print url
-    col = 0
-    #print "Text:" + text
     hash_title(text)
     match_pattern(text.lower())
-  #  print "===============================================\n\n"
-"""
-    for w in text.split():
-        if (col + len(w) + 1) > columns:
-            col = 0
-            print
-        print w,
-        col += len(w) + 1
-    print
-    print
-"""
+
 def usage():
     print "Usage: google [OPTIONS] KEYWORDS..."
     print "Performs a Google search and prints the results to stdout.\n"
@@ -352,9 +360,15 @@ parse_google_html(parser,save)
 word_length +=1
 #print check_frequency(['roger','federer'])
 parse_google_html(parser,save)
+
+print "Frequent pattern list:"
 print frequent_pattern_list
+print "Pattern match:"
+print pattern_match
 #parser.feed(resp.read())
 conn.close()
+wiki = "http://en.wikipedia.org/wiki/Roger_Federer"
+read_web_page(wiki)
 #print "key word is " + ' '.join( keywords)
 #print_title_hash()
 #print pattern_match
