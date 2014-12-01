@@ -42,7 +42,7 @@ key_word = ""
 title_hash = {}
 pattern_match = []
 rm_word_list = ['','in','at','a','is','was','the','to','from','of','on','and','-','|','an','by','for']
-pattern = ["*** and ","*** is ", "*** was","*** were"]
+pattern = ["*** and ","*** is ", "*** was","*** were","*** "]
 frequent_pattern_list = {}
 
 # Classes
@@ -122,6 +122,8 @@ def strip_tags(html):
 def rm_empty_lines(txt):
     while '\n\n' in txt:
         txt=txt.replace('\n\n','\n')
+    while '  ' in txt:
+        txt=txt.replace('  ','zzz')
     return txt
 
 def rm_line_if_length_is_short(txt):
@@ -133,6 +135,12 @@ def rm_line_if_length_is_short(txt):
     new_txt = "\n".join(new)
     return new_txt
 
+def pattern_match_web_page(txt):
+    splited = re.split(',|;|\n',txt)
+    for sen in splited:
+        print sen + "]]]]]]]]]]]]]]]]"
+        match_pattern(sen)
+
 def read_web_page(url):
     import urllib
     conn = urllib.urlopen(url)
@@ -143,8 +151,9 @@ def read_web_page(url):
     filtered = rm_empty_lines(text)
     filtered = rm_line_if_length_is_short(filtered)
     #print filtered[0:20000]
-    print "[read_web_page]The length of useful info is " + str(len(filtered))
-    
+    print "[read_web_page]The length of useful info is " + str(len(filtered))    
+    return filtered.lower()
+
 def init_pattern():
     global pattern
     dum_list = []
@@ -223,10 +232,6 @@ def hash_title(title):
 def limit_hash():
 #    stop_index = 0
     stored_key = []
- #   sort_x = sorted(title_hash.items(),key = operator.itemgetter(1))
-    #print sort_x
-    #print "before limit hash:"
-    #print title_hash
     for key in title_hash:
 	if title_hash[key] < 3:
 		stored_key.append(key)
@@ -262,11 +267,11 @@ def parse_google_entry(title, url, text):
     else:
         try:
 		hash_title(title);
-                match_pattern(title.lower())
+               # match_pattern(title.lower())
 	except:
 		print "Error happens in print statement"
     hash_title(text)
-    match_pattern(text.lower())
+  #  match_pattern(text.lower())
 
 def usage():
     print "Usage: google [OPTIONS] KEYWORDS..."
@@ -367,9 +372,11 @@ print "Pattern match:"
 print pattern_match
 #parser.feed(resp.read())
 conn.close()
-wiki = "http://en.wikipedia.org/wiki/Roger_Federer"
-read_web_page(wiki)
+wiki = "http://en.wikipedia.org/wiki/Rafael_Nadal"
+txt = read_web_page(wiki)
+pattern_match_web_page(txt)
 #print "key word is " + ' '.join( keywords)
 #print_title_hash()
-#print pattern_match
+print "!!!!!!!!!!!!!!!!!!!!!pattern match is"
+print pattern_match
 # vim:set sts=4 sw=4 et:
