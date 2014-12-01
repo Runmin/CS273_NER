@@ -138,8 +138,9 @@ def rm_line_if_length_is_short(txt):
 def pattern_match_web_page(txt):
     splited = re.split(',|;|\n',txt)
     for sen in splited:
-        print sen + "]]]]]]]]]]]]]]]]"
+        #print sen + "]]]]]]]]]]]]]]]]"
         match_pattern(sen)
+        hash_word(sen)
 
 def read_web_page(url):
     import urllib
@@ -149,7 +150,7 @@ def read_web_page(url):
     text = strip_tags(html)
     #filtered = filter(lambda x: not re.match(r'^\s*$', x),text)
     filtered = rm_empty_lines(text)
-    filtered = rm_line_if_length_is_short(filtered)
+    filtered = rm_line_if_length_is_short(text)
     #print filtered[0:20000]
     print "[read_web_page]The length of useful info is " + str(len(filtered))    
     return filtered.lower()
@@ -172,6 +173,22 @@ def match_pattern(input):
 		pattern_match.append(input)
 		return
 
+def succinct_pattern():
+    global pattern_match
+    global frequent_pattern_list
+    new_pattern = []
+    check = frequent_pattern_list[1]
+    for p in pattern_match:
+        l = p.split(' ')
+        n_l = []
+        for tup in l:
+            if tup in check:
+                n_l.append(tup)
+        new_p = ' '.join(n_l)
+        new_pattern.append(new_p)
+    pattern_match = new_pattern
+    print pattern_match
+
 def clean_input(input):
     line = re.sub('[. !,$@|:]','',input)
     return line
@@ -180,6 +197,7 @@ def clean_input(input):
 def rm_useless_word(input):
 #    useless_word_list = ['the','a'];
    global rm_word_list
+   return False
    if input in rm_word_list:
 	return True
    return False
@@ -200,9 +218,9 @@ def check_frequency(word_list):
 			return False
         return True
 
-def hash_title(title):
+def hash_word(info):
     global word_length
-    word_list = title.split()
+    word_list = info.split()
     for i in range(0,len(word_list)):
 	#print "word is " + word
         word = word_list[i:i+word_length]
@@ -266,11 +284,11 @@ def parse_google_entry(title, url, text):
         print "\x1B[96m* \x1B[92m%s\n\x1B[93m%s\x1B[39m" % (title, url)
     else:
         try:
-		hash_title(title);
+		hash_word(title);
                # match_pattern(title.lower())
 	except:
 		print "Error happens in print statement"
-    hash_title(text)
+    hash_word(text)
   #  match_pattern(text.lower())
 
 def usage():
@@ -374,9 +392,12 @@ print pattern_match
 conn.close()
 wiki = "http://en.wikipedia.org/wiki/Rafael_Nadal"
 txt = read_web_page(wiki)
+word_length = 1
 pattern_match_web_page(txt)
 #print "key word is " + ' '.join( keywords)
 #print_title_hash()
 print "!!!!!!!!!!!!!!!!!!!!!pattern match is"
 print pattern_match
+
+#succinct_pattern()
 # vim:set sts=4 sw=4 et:
