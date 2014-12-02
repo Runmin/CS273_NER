@@ -364,14 +364,14 @@ def search_google_with_seedword(seedword,url):
     #parse_google_html(parser,save)#build frequency for double word
 
 
-def begin_search_google(seed_word_list,url):
+def begin_search_google(seed_list,url):
     global pattern_match
     global frequent_word_list
     global combined_seed_pattern
     global global_pattern_match
     global global_frequent_word_list
     global global_combined_seed_pattern
-    for word in seed_word_list:
+    for word in seed_list:
         print "[begin_search_google]Seedword: "+ str(word) +"==============================="
         # Init the global variable before search begins
         init_global_variable_before_google_search()
@@ -422,8 +422,83 @@ def print_info():
         print "Combined seed pattern:"
         print global_combined_seed_pattern[x]
 
-########### Program Main
+def flat_list(dic):
+    flat = []    
+    for x in dic:
+        for y in dic[x]:
+            flat.append(y)
+    return flat
+    
+def calculate_overlapping():
+    #use bag of word model
+    #first, change name into * 
+    global keywords
+    global global_combined_seed_pattern
+    overlap_pattern = []
+   # print global_combined_seed_pattern
+    for x in keywords:
+        #print "Print info with keyword: " + str(x) + "============================================="
+        #print "Combined seed pattern:"
+        print "name is "
+        print x
+        move_name_into_stars(x)
+   # print global_combined_seed_pattern
+    #import itertools
+    merged = flat_list(global_combined_seed_pattern)#list(itertools.chain(*global_combined_seed_pattern))
+    print "mergerd"
+    print merged
+    
+    for p1 in merged:
+        for p2 in merged: 
+            check = p1.split(" ")
+            against = p2.split(" ")
+            count = 0
+            if p1 == p2:
+                continue
+            if len(p1) > len(p2):
+                save = check
+                check = against
+                against = save
+            for ele in check:
+                if ele in against and ele != "*":
+                    count+=1
+            if count > len(check) /2 :
+                dum = [" ".join(check)," ".join(against)]
+                overlap_pattern.append(dum)
+    print "[calculate overlapping]"
+    print overlap_pattern
+    
+def sentence_overlap(s1,s2):
+    return ""
 
+def move_name_into_stars(name_seed):
+    global seed_word_list
+    global keywords
+    global global_combined_seed_pattern
+    new_pattern = []
+    pattern = global_combined_seed_pattern[name_seed]
+    for p in pattern:
+        for x in keywords:
+            if x in p:
+                p = p.replace(x,"*")
+        new_pattern.append(p) 
+         
+    check_list = []
+    for group in seed_word_list:
+        for name in group:
+            check_list.append(name)
+
+    pattern = []
+    for p in new_pattern:
+        for x in check_list:
+            if x in p:
+                p = p.replace(x,"*")
+        pattern.append(p)
+    global_combined_seed_pattern[name_seed] = pattern
+    print pattern
+        
+    
+########### Program Main
 # Process command line options.
 optlist = None
 keywords = None
@@ -484,7 +559,7 @@ init_seed_word_list()
 begin_search_google(keywords,url)
 
 print_info()
-
+calculate_overlapping()
 #init_pattern()
 """
 if not openUrl:
