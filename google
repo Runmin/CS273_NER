@@ -1,19 +1,4 @@
 #!/usr/bin/python
-#
-# Copyright (C) 2008 Henri Hakkinen
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import termios, fcntl, struct
@@ -39,11 +24,25 @@ colorize = False   # If True, colorizes the output (option -C)
 
 word_length = 1
 key_word = ""
+
 title_hash = {}
+
 pattern_match = []
+global_pattern_match = {}
+
 rm_word_list = ['','in','at','a','is','was','the','to','from','of','on','and','-','|','an','by','for']
-pattern = ["*** and ","*** is ", "*** was","*** were","*** "]
-frequent_pattern_list = {}
+
+i_pattern = ["*** and ","*** is ", "*** was","*** were","*** "] #actually the last one contains everything above
+pattern = []
+
+global_frequent_word_list = {}
+frequent_word_list = {}
+
+seed_word_list = []
+
+global_combined_seed_pattern = {}
+combined_seed_pattern = []
+
 
 # Classes
 class GoogleParser(HTMLParser.HTMLParser):
@@ -136,11 +135,12 @@ def rm_line_if_length_is_short(txt):
     return new_txt
 
 def pattern_match_web_page(txt):
-    splited = re.split(',|;|\n',txt)
+    splited = re.split('[.|,|;|\n]',txt)
     for sen in splited:
         #print sen + "]]]]]]]]]]]]]]]]"
         match_pattern(sen)
         hash_word(sen)
+        match_combined_seedword(sen)
 
 def read_web_page(url):
     import urllib
@@ -155,19 +155,37 @@ def read_web_page(url):
     print "[read_web_page]The length of useful info is " + str(len(filtered))    
     return filtered.lower()
 
-def init_pattern():
+def match_combined_seedword(input):
+    global seed_word_list
+    global combined_seed_pattern
+    count = 0
+    for group in seed_word_list:
+        for seed in group: 
+            if seed in input:
+                count +=1
+                break
+    if count >=2:
+        combined_seed_pattern.append(input)
+        
+
+def init_pattern(word_list):
     global pattern
+    global i_pattern
+    pattern = []
+    aword = " ".join(word_list) 
     dum_list = []
-    for x in pattern:
-	dum_list.append(x.replace("***",key_word))
-    if len(keywords) >=2:
-        for word in keywords:
-		for x in pattern:
+    for x in i_pattern:
+	dum_list.append(x.replace("***",aword))
+    if len(word_list) >=2:
+        for word in word_list:
+		for x in i_pattern:
 			dum_list.append(x.replace("***",word))
     pattern = dum_list
+    print "[init_pattern] The patterns are for word: " + str(aword)
     print pattern
 
 def match_pattern(input):
+    global pattern
     for x in pattern:
 	if (x in input):
 		pattern_match.append(input)
@@ -175,9 +193,9 @@ def match_pattern(input):
 
 def succinct_pattern():
     global pattern_match
-    global frequent_pattern_list
+    global frequent_word_list
     new_pattern = []
-    check = frequent_pattern_list[1]
+    check = frequent_word_list[1]
     for p in pattern_match:
         l = p.split(' ')
         n_l = []
@@ -195,7 +213,6 @@ def clean_input(input):
 
 
 def rm_useless_word(input):
-#    useless_word_list = ['the','a'];
    global rm_word_list
    return False
    if input in rm_word_list:
@@ -204,11 +221,11 @@ def rm_useless_word(input):
 
 def check_frequency(word_list):
     global word_length
-    global frequent_pattern_list
+    global frequent_word_list
     if word_length <=1:
 	return True
     else:
-	check_hash = frequent_pattern_list[word_length-1]
+	check_hash = frequent_word_list[word_length-1]
 	for word in word_list:
 		t = (clean_input(word)).lower()
                 #print "t is :" + t
@@ -257,9 +274,11 @@ def limit_hash():
     for key in stored_key:
 	title_hash.pop(key,None)
 
-def parse_general_html():
-    return ""
-
+def parse_general_web(url):
+    txt = read_web_page(url)
+    #word_length = 1
+    pattern_match_web_page(txt)
+    
 def pattern_mining():
     return ""
 
@@ -271,7 +290,7 @@ def parse_google_html(parser,content):
     global title_hash
     parser.feed(content)
     limit_hash()
-    frequent_pattern_list[word_length] = title_hash
+    frequent_word_list[word_length] = title_hash
     title_hash = {}
 
 def parse_google_entry(title, url, text):
@@ -284,11 +303,23 @@ def parse_google_entry(title, url, text):
         print "\x1B[96m* \x1B[92m%s\n\x1B[93m%s\x1B[39m" % (title, url)
     else:
         try:
+                #print "url is " + url
 		hash_word(title);
                # match_pattern(title.lower())
 	except:
-		print "Error happens in print statement"
+		print "[parse_google_entry]Error happens in print statement"
     hash_word(text)
+    try:
+        index = url.index("&sa=")
+        url = url[0:index]
+        if url.startswith('/url?q='):
+            url = url[7:]
+            print "[parse_google_entry]begin parse url:" + url
+            parse_general_web(url)
+        else:
+            print "url is not valid"
+    except:
+        print "url not valid"
   #  match_pattern(text.lower())
 
 def usage():
@@ -300,9 +331,96 @@ def usage():
     print "  -l LANG  display in language LANG, such as fi for Finnish"
     print "  -C       enable color output"
     print "  -j       open the first result in a web browser\n"
-    print "Copyright (C) 2008 Henri Hakkinen."
-    print "Report bugs to <henux@users.sourceforge.net>."
     sys.exit(1)
+
+def search_google_with_seedword(seedword,url):
+    global word_length
+    # Construct the query URL.
+    url += "q="
+    word_list = seedword.split(' ')
+    #print "[search google with seedword]seedword is " + seedword
+    url += quote_plus(word_list[0])
+    if len(word_list) > 1:
+        for kw in word_list[1:]:
+     #       print "kw is " + kw
+            url += "+" + quote_plus(kw)
+    #Init pattern for a certain seed word
+    init_pattern(word_list)
+    print "[search google with seedword] url is : " + str(url)
+    # Connect to Google and request the result page.
+    conn = HTTPConnection("www.google.com")
+    conn.request("GET", url)
+    resp = conn.getresponse()
+    if resp.status != 200:
+        # The server responded with an error.
+        print "Server responded with an error:", str(resp.status)
+        sys.exit(1)
+
+    # Parse the HTML document and print the results.
+    save = resp.read()
+    parser = GoogleParser()
+    parse_google_html(parser,save)#build frequency for single word
+    #word_length +=1
+    #parse_google_html(parser,save)#build frequency for double word
+
+
+def begin_search_google(seed_word_list,url):
+    global pattern_match
+    global frequent_word_list
+    global combined_seed_pattern
+    global global_pattern_match
+    global global_frequent_word_list
+    global global_combined_seed_pattern
+    for word in seed_word_list:
+        print "[begin_search_google]Seedword: "+ str(word) +"==============================="
+        # Init the global variable before search begins
+        init_global_variable_before_google_search()
+ 
+        search_google_with_seedword(word,url)
+        #Save the pattern
+        global_pattern_match[word] = pattern_match
+        #Save frequent word in html
+        global_frequent_word_list[word] = frequent_word_list
+        global_combined_seed_pattern[word] = combined_seed_pattern
+        print "[begin_search_google] Combined seed pattern:"
+        print combined_seed_pattern
+        print "Frequent pattern list:"
+        #print frequent_word_list
+        #print "Pattern match:"
+        #print pattern_match
+        
+
+def init_global_variable_before_google_search():
+    global pattern_match
+    global word_length
+    global frequent_word_list
+    global combined_seed_pattern
+    word_length = 1
+    pattern_match = []
+    frequent_word_list = {}
+    combined_seed_pattern = []    
+ 
+def init_seed_word_list():
+    global seed_word_list
+    global keywords
+    for x in keywords:
+        name_group = []
+        name_group.append(x)
+        s = x.split(' ')
+        if len(s) > 1:
+            for t in s:
+                name_group.append(t)
+        seed_word_list.append(name_group)
+    print "[init_seed_word_list] seed word list is:"
+    print seed_word_list
+
+def print_info():
+    global keywords
+    global global_combined_seed_pattern
+    for x in keywords:
+        print "Print info with keyword: " + str(x) + "============================================="
+        print "Combined seed pattern:"
+        print global_combined_seed_pattern[x]
 
 ########### Program Main
 
@@ -352,14 +470,23 @@ if num != None:
     url += "num=" + num + "&"
 if lang != None:
     url += "hl=" + lang + "&"
-
+"""
+url += "q=" + quote_plus(keywords[0])
 url += "q=" + quote_plus(keywords[0])
 for kw in keywords[1:]:
     url += "+" + quote_plus(kw)
+"""
+#key_word = ' '.join(keywords)
+for x in keywords:
+    print "seed word: " + str(x)
 
-key_word = ' '.join(keywords)
-init_pattern()
+init_seed_word_list() 
+begin_search_google(keywords,url)
 
+print_info()
+
+#init_pattern()
+"""
 if not openUrl:
     print "\nhttp://www.google.com%s\n" % url
 
@@ -370,6 +497,7 @@ columns = struct.unpack("HH", winsz)[1]
 # Connect to Google and request the result page.
 conn = HTTPConnection("www.google.com")
 conn.request("GET", url)
+print "url is " + str(url)
 resp = conn.getresponse()
 if resp.status != 200:
     # The server responded with an error.
@@ -385,7 +513,7 @@ word_length +=1
 parse_google_html(parser,save)
 
 print "Frequent pattern list:"
-print frequent_pattern_list
+print frequent_word_list
 print "Pattern match:"
 print pattern_match
 #parser.feed(resp.read())
@@ -396,8 +524,8 @@ word_length = 1
 pattern_match_web_page(txt)
 #print "key word is " + ' '.join( keywords)
 #print_title_hash()
-print "!!!!!!!!!!!!!!!!!!!!!pattern match is"
-print pattern_match
-
+print "!!!!!!!!!!!!!!!!!!!!!pattern match length is"
+print len(pattern_match)
+"""
 #succinct_pattern()
 # vim:set sts=4 sw=4 et:
