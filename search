@@ -43,7 +43,7 @@ seed_word_list = []
 global_combined_seed_pattern = {}
 combined_seed_pattern = []
 
-
+global_saved_page_info = []
 # Classes
 class GoogleParser(HTMLParser.HTMLParser):
     def __init__(self):
@@ -134,23 +134,30 @@ def rm_line_if_length_is_short(txt):
     new_txt = "\n".join(new)
     return new_txt
 
+def rm_parenthesis(txt):
+    new_txt = re.sub(r'\[.*\]',"",txt)
+    txt = re.sub(r'\(.*\)',"",new_txt)
+    return txt
+
 def pattern_match_web_page(txt):
     splited = re.split('[.|,|;|\n]',txt)
     for sen in splited:
         #print sen + "]]]]]]]]]]]]]]]]"
         match_pattern(sen)
-        hash_word(sen)
-        match_combined_seedword(sen)
+        #hash_word(sen)
+    #    match_combined_seedword(sen)
 
 def read_web_page(url):
     import urllib
     conn = urllib.urlopen(url)
     html = conn.read()
     #print html
-    text = strip_tags(html)
+    filtered = strip_tags(html)
     #filtered = filter(lambda x: not re.match(r'^\s*$', x),text)
-    filtered = rm_empty_lines(text)
-    filtered = rm_line_if_length_is_short(text)
+    filtered = rm_parenthesis(filtered)
+    filtered = rm_empty_lines(filtered)
+    filtered = rm_line_if_length_is_short(filtered)
+    #filtered = rm_parenthesis(filtered)
     #print filtered[0:20000]
     print "[read_web_page]The length of useful info is " + str(len(filtered))    
     return filtered.lower()
@@ -184,11 +191,12 @@ def init_pattern(word_list):
     print "[init_pattern] The patterns are for word: " + str(aword)
     print pattern
 
-def match_pattern(input):
+def match_pattern(info):
     global pattern
+    global pattern_match
     for x in pattern:
-	if (x in input):
-		pattern_match.append(input)
+	if (x in info):
+		pattern_match.append(info)
 		return
 
 def succinct_pattern():
@@ -235,6 +243,16 @@ def check_frequency(word_list):
 			return False
         return True
 
+def stat_word_frequency(list_word):
+    global title_hash
+    global word_length
+    word_length = 1
+    title_hash = {}
+    for ele in list_word:
+        hash_word(ele)
+    limit_hash()
+    return title_hash
+
 def hash_word(info):
     global word_length
     word_list = info.split()
@@ -266,6 +284,7 @@ def hash_word(info):
 
 def limit_hash():
 #    stop_index = 0
+    global title_hash
     stored_key = []
     for key in title_hash:
 	if title_hash[key] < 3:
@@ -274,7 +293,7 @@ def limit_hash():
     for key in stored_key:
 	title_hash.pop(key,None)
 
-def parse_general_web(url):
+def parse_general_web(url): 
     txt = read_web_page(url)
     #word_length = 1
     pattern_match_web_page(txt)
@@ -303,8 +322,8 @@ def parse_google_entry(title, url, text):
         print "\x1B[96m* \x1B[92m%s\n\x1B[93m%s\x1B[39m" % (title, url)
     else:
         try:
-                #print "url is " + url
-		hash_word(title);
+                print "url is " + url
+	#	hash_word(title);
                # match_pattern(title.lower())
 	except:
 		print "[parse_google_entry]Error happens in print statement"
@@ -332,6 +351,164 @@ def usage():
     print "  -C       enable color output"
     print "  -j       open the first result in a web browser\n"
     sys.exit(1)
+
+def flat_dict_into_list(dict_input):
+    list_output = []
+    for key in dict_input:
+        for sen in dict_input[key]:
+            list_output.append(sen)
+    return list_output
+
+def flat_dictkey_into_list(dict_input):
+    dum = []
+    for key in dict_input:
+        dum.append(key)
+    return dum
+
+def update_dict_with_key(hashmap,key):
+    #print "[update_dict_with_key] key is " + key
+    if key in hashmap:
+        hashmap[key] +=1
+    else:
+        hashmap[key] = 1
+
+def limit_hash_result(hashresult,limit):
+    temp_hash = {}
+    for key in hashresult:
+        if hashresult[key]  >= limit:
+            temp_hash[key] = hashresult[key]
+    return temp_hash
+
+def prepare_list(word_list):
+    new_list = []
+    for x in word_list:
+        t = x.split(' ')
+        new_list.append(t)
+    return new_list
+
+def print_pattern_with_star(sen_list):
+    for sen in sen_list:
+        if '*' in sen:
+            print sen
+
+def frequent_pattern_mining(): 
+    global global_pattern_match
+    global keywords
+    for name in keywords:
+        move_name_into_stars(name, global_pattern_match)
+#    for key in global_pattern_match:
+#        print "key is " + key + "================================"
+#        print global_pattern_match[key]
+    data_list = flat_dict_into_list(global_pattern_match)
+#    print "data_list is ==============================================="
+#    print data_list
+    single_frequent_hash = get_single_frequent_hash(data_list)
+    print single_frequent_hash
+    dum = []
+    frequent_list =[] 
+    for key in single_frequent_hash:
+        frequent_list.append([key])
+    dum = do_frequent_pattern_mining(frequent_list,data_list)
+    dum = prepare_list(dum)
+    print dum
+
+    #dum = do_frequent_pattern_mining(dum,data_list)
+    #dum = prepare_list(dum)
+    #print dum
+    #print_pattern_with_star(dum)
+    #for i in range(1,3):
+ 
+def get_single_frequent_hash(data_list):
+    temp = {}
+    for sen in data_list:
+        dum = sen.split(' ')
+        for word in dum:
+            update_dict_with_key(temp,word)
+    temp = limit_hash_result(temp,20)
+    return temp
+
+def get_selection_element_list(input_list,total):
+    s_list = []
+    result = []
+    length = len(input_list)
+    
+    if len(input_list) == 1:
+        return input_list
+    do_get_selection_element_list(input_list,s_list,0,0,total,result)
+    return result
+
+def copy_list(l1,l2):
+    for x in l1:
+        l2.append(x)
+
+
+def do_get_selection_element_list(input_list,s_list,index,num_ele,total,result):
+    #print "index = " + str(index) + "num_ele "
+    if num_ele == total and index <= len(input_list):
+     #   print "found!!!"
+     #   print s_list
+        result.append(s_list)
+    elif index >=len(input_list):
+        return
+    else:
+    #    print "s_list with index = " + str(index)
+    #    print s_list
+        save1 = []
+        save2 = []
+        copy_list(s_list,save1)
+        copy_list(s_list,save2)
+        do_get_selection_element_list(input_list,save1,index+1, num_ele,total,result)
+        save2.append(input_list[index])
+        do_get_selection_element_list(input_list,save2,index+1,num_ele+1,total,result)
+        return
+
+def merge_two_list(l1,l2):
+    dum = []
+    copy_list(l1,dum)
+    for x in l2:
+        if x not in dum:
+            dum.append(x)
+    return dum
+
+def check_all_sub_frequency(input_list,frequent_list):
+    all_sub = get_selection_element_list(input_list,len(input_list)-1)
+   # print "all sub"
+   # print all_sub
+    for x in all_sub:
+        if x not in frequent_list:
+            return False
+    return True
+
+
+def do_frequent_pattern_mining(frequent_list,data_list):
+    dict_count = {} 
+    #frequent_list [['a'],['b']]
+    for i in range(0,len(frequent_list)):
+        for j in range(i,len(frequent_list)):
+            p1 = frequent_list[i]
+            p2 = frequent_list[j]
+            p = merge_two_list(p1,p2)
+            if check_all_sub_frequency(p,frequent_list):
+           #     print "true"      
+                hash_frequency(p,data_list,dict_count)               
+    temp = limit_hash_result(dict_count,10)    
+    new_fre_list = flat_dictkey_into_list(temp)
+    return new_fre_list
+
+def merge_list_into_key(item_list):
+    key = " ".join(item_list)
+    return key    
+
+def hash_frequency(potential_list, data_list, dict_count):
+    length = len(potential_list)
+    for sen in data_list:
+        count = 0
+        for item in potential_list:
+            if item in sen:
+                count +=1
+        if count == length:
+            key = merge_list_into_key(potential_list)
+            update_dict_with_key(dict_count,key)
 
 def search_google_with_seedword(seedword,url):
     global word_length
@@ -382,12 +559,6 @@ def begin_search_google(seed_list,url):
         #Save frequent word in html
         global_frequent_word_list[word] = frequent_word_list
         global_combined_seed_pattern[word] = combined_seed_pattern
-        print "[begin_search_google] Combined seed pattern:"
-        print combined_seed_pattern
-        print "Frequent pattern list:"
-        #print frequent_word_list
-        #print "Pattern match:"
-        #print pattern_match
         
 
 def init_global_variable_before_google_search():
@@ -428,7 +599,38 @@ def flat_list(dic):
         for y in dic[x]:
             flat.append(y)
     return flat
-    
+ 
+def reduce_list_with_frequent_word(list_pattern, stat_freq):
+    new_pattern = []
+    for x in list_pattern:
+        d = x.split(" ")
+        new = []
+        for ele in d:
+            if ele in stat_freq:
+                new.append(ele)
+        new_pattern.append(" ".join(new))
+    return new_pattern
+
+def return_closer_pattern(pattern_list):
+    closer_pattern = []
+    for p in pattern_list:
+        p_list = p.split(" ")
+      #  print p
+        start = -1
+        end = -1
+        for i in range(0,len(p_list)):
+            if p_list[i] == "*":
+                if start == -1:
+                    start = i
+             #       print "start = " + str(start)
+                else:
+                    end = i
+                    break
+        if end - start > 0 and end -start <= 5:
+            closer_pattern.append(p)
+            #print "append!"
+    return closer_pattern
+
 def calculate_overlapping():
     #use bag of word model
     #first, change name into * 
@@ -441,21 +643,30 @@ def calculate_overlapping():
         #print "Combined seed pattern:"
         print "name is "
         print x
-        move_name_into_stars(x)
+        move_name_into_stars(x,global_combined_seed_pattern)
    # print global_combined_seed_pattern
     #import itertools
     merged = flat_list(global_combined_seed_pattern)#list(itertools.chain(*global_combined_seed_pattern))
-    print "mergerd"
-    print merged
-    
-    for p1 in merged:
-        for p2 in merged: 
-            check = p1.split(" ")
-            against = p2.split(" ")
+   # print "merged"
+   # print merged
+    #word_fre_list = stat_word_frequency(merged)
+    #print word_fre_list
+    #new_pattern = reduce_list_with_frequent_word(merged, word_fre_list)
+    #print new_pattern
+    closer = return_closer_pattern(merged)
+    print "closer:"
+    print closer
+"""    
+    for i in range(0,len(merged)):
+        if i == len(merged)-1:
+            break
+        for j in range(i+1,len(merged)):
+            #print "i:" + str(merged[i])
+            #print "j:" + str(merged[j])
+            check = merged[i].split(" ")
+            against = merged[j].split(" ")
             count = 0
-            if p1 == p2:
-                continue
-            if len(p1) > len(p2):
+            if len(merged[i]) > len(merged[j]):
                 save = check
                 check = against
                 against = save
@@ -466,17 +677,21 @@ def calculate_overlapping():
                 dum = [" ".join(check)," ".join(against)]
                 overlap_pattern.append(dum)
     print "[calculate overlapping]"
-    print overlap_pattern
-    
+    for x in overlap_pattern:
+        print x
+"""
+ 
 def sentence_overlap(s1,s2):
     return ""
 
-def move_name_into_stars(name_seed):
+def move_name_into_stars(name_seed, target):
     global seed_word_list
     global keywords
-    global global_combined_seed_pattern
+    #global global_combined_seed_pattern
+    print "target type is " + str(type(target))
     new_pattern = []
-    pattern = global_combined_seed_pattern[name_seed]
+    pattern = target[name_seed]
+
     for p in pattern:
         for x in keywords:
             if x in p:
@@ -494,9 +709,9 @@ def move_name_into_stars(name_seed):
             if x in p:
                 p = p.replace(x,"*")
         pattern.append(p)
-    global_combined_seed_pattern[name_seed] = pattern
-    print pattern
-        
+    target[name_seed] = pattern
+    #print pattern
+   
     
 ########### Program Main
 # Process command line options.
@@ -557,9 +772,14 @@ for x in keywords:
 
 init_seed_word_list() 
 begin_search_google(keywords,url)
+frequent_pattern_mining()
 
-print_info()
-calculate_overlapping()
+#input_list = ['a','b','c','d','e']
+#d = get_selection_element_list(input_list,3)
+#print d
+
+#print_info()
+#calculate_overlapping()
 #init_pattern()
 """
 if not openUrl:
