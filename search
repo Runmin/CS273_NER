@@ -29,10 +29,12 @@ title_hash = {}
 
 pattern_match = []
 global_pattern_match = {}
+# to from of on by
+rm_word_list = ['and','that','this','where','which','also','has','had','have','','when','at','as','in','at','a','the','-','|','an','for','then','after','he','she','it']
 
-rm_word_list = ['','in','at','a','is','was','the','to','from','of','on','and','-','|','an','by','for']
+num_list = ['one','two','three','four', 'five' ,'six','seven','eight','nine','ten','first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth']
 
-i_pattern = ["*** and ","*** is ", "*** was","*** were","*** "] #actually the last one contains everything above
+i_pattern = ["*** is ", "*** was","*** were","*** "] #actually the last one contains everything above
 pattern = []
 
 global_frequent_word_list = {}
@@ -219,14 +221,6 @@ def clean_input(input):
     line = re.sub('[. !,$@|:]','',input)
     return line
 
-
-def rm_useless_word(input):
-   global rm_word_list
-   return False
-   if input in rm_word_list:
-	return True
-   return False
-
 def check_frequency(word_list):
     global word_length
     global frequent_word_list
@@ -386,10 +380,89 @@ def prepare_list(word_list):
         new_list.append(t)
     return new_list
 
+def succinct_input_list(i):
+    n = rm_useless_word(i)
+    n = rm_number(n)
+    n = rm_symbol(n)
+    n = rm_short(n)
+    n = rm_specific(n)
+    n = remove_duplicate(n)
+    return n
+
+def remove_duplicate(input_list):
+    new_list = []
+    for x in input_list:
+        if x not in new_list:
+            new_list.append(x)
+    return new_list
+
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+def rm_useless_word(input_list):
+    global rm_word_list
+    global num_list
+    new_list = []
+
+    check = rm_word_list+num_list
+    for word in input_list:
+        if word not in check:
+            new_list.append(word)
+
+    return new_list
+
+def rm_number(input_list):
+    new_list = []
+    for word in input_list:
+        if not is_number(word):
+            new_list.append(word)
+    return new_list
+
+def rm_symbol(input_list):
+    new_list = []
+    for word in input_list:
+        re.sub(r'[^\w]', '', word)
+        if word != "":
+            new_list.append(word)
+    return new_list
+
+def rm_specific(input_list):
+    new_list = []
+    for word in input_list:
+        t = re.sub(r'[/\:"]','',word)
+        new_list.append(t)
+    return new_list
+
+def rm_short(input_list):
+    new_list = []
+    for word in input_list:
+        if len(word) >1:
+            new_list.append(word)
+    return new_list
+
 def print_pattern_with_star(sen_list):
     for sen in sen_list:
         if '*' in sen:
             print sen
+
+def succinct_data_list(single_frequent_list, data_list):
+    new = []
+    for sen in data_list:
+        l = sen.split(' ')
+        length = len(l)
+        count = 0
+        for x in l:
+            if x in single_frequent_list:
+                count +=1
+        if count >= length/2:
+            new.append(sen)
+
+    return new
+    
 
 def frequent_pattern_mining(): 
     global global_pattern_match
@@ -401,30 +474,52 @@ def frequent_pattern_mining():
 #        print global_pattern_match[key]
     data_list = flat_dict_into_list(global_pattern_match)
 #    print "data_list is ==============================================="
-#    print data_list
-    single_frequent_hash = get_single_frequent_hash(data_list)
+    print len(data_list)
+    single_frequent_hash = get_single_frequent_hash(data_list,10)
     print single_frequent_hash
-    dum = []
-    frequent_list =[] 
-    for key in single_frequent_hash:
-        frequent_list.append([key])
-    dum = do_frequent_pattern_mining(frequent_list,data_list)
-    dum = prepare_list(dum)
+
+    frequent_list = []
+
+    dum = flat_dictkey_into_list(single_frequent_hash)
+    dum = succinct_input_list(dum)
+    print "after remove useless word"
     print dum
 
-    #dum = do_frequent_pattern_mining(dum,data_list)
-    #dum = prepare_list(dum)
+    data_list = succinct_data_list(dum,data_list)
+    print data_list
+    #print len(t)
+    #return 
+    for key in dum:
+        frequent_list.append([key])
+
+    dum = do_frequent_pattern_mining(frequent_list,data_list,10)
+    dum = prepare_list(dum)
     #print dum
-    #print_pattern_with_star(dum)
-    #for i in range(1,3):
+
+    dum = do_frequent_pattern_mining(dum,data_list,10)
+    dum = prepare_list(dum)
+    #print dum
+    print_pattern_with_star(dum)
+    
+    dum = do_frequent_pattern_mining(dum,data_list,10)
+    dum = prepare_list(dum)
+    print_pattern_with_star(dum)
+    #print dum
+    
+    dum = do_frequent_pattern_mining(dum,data_list,10)
+    dum = prepare_list(dum)
+    print_pattern_with_star(dum)
+    #print dum
+   
+     #for i in range(1,3):
  
-def get_single_frequent_hash(data_list):
+def get_single_frequent_hash(data_list, limit):
     temp = {}
     for sen in data_list:
         dum = sen.split(' ')
         for word in dum:
             update_dict_with_key(temp,word)
-    temp = limit_hash_result(temp,20)
+    temp = limit_hash_result(temp,limit)
     return temp
 
 def get_selection_element_list(input_list,total):
@@ -441,6 +536,47 @@ def copy_list(l1,l2):
     for x in l1:
         l2.append(x)
 
+def test_pattern_matching():
+    data_list = ["* is a player","* is a talented player", "* is a swiss player"]
+    single = get_single_frequent_hash(data_list,2)
+    dum = []
+    for x in single:
+        dum.append(x)
+    print data_list
+    frequent_list = []
+    for key in dum:
+        frequent_list.append([key])
+
+    dum = do_frequent_pattern_mining(frequent_list,data_list,2)
+    dum = prepare_list(dum)
+    print "second"
+    print dum
+
+    dum = do_frequent_pattern_mining(dum,data_list,2)
+    dum = prepare_list(dum)
+    print "third"
+    print dum
+    #print_pattern_with_star(dum)
+    
+    dum = do_frequent_pattern_mining(dum,data_list,2)
+    c = get_ordered_pattern(dum[0],data_list)
+    print c
+    dum = prepare_list(dum)
+    #print_pattern_with_star(dum)
+    print "fourth"
+    print dum
+    
+    dum = do_frequent_pattern_mining(dum,data_list,2)
+    dum = prepare_list(dum)
+#    print_pattern_with_star(dum)
+    print "fifth"
+    print dum
+
+    dum = do_frequent_pattern_mining(dum,data_list,2)
+    dum = prepare_list(dum)
+    print "sixth"
+    print dum
+    #print_pattern_with_star(dum)
 
 def do_get_selection_element_list(input_list,s_list,index,num_ele,total,result):
     #print "index = " + str(index) + "num_ele "
@@ -479,24 +615,44 @@ def check_all_sub_frequency(input_list,frequent_list):
             return False
     return True
 
+def get_ordered_pattern(list_word,data_list):
+    length = len(list_word)
+    new_pattern = []
+    for sen in data_list:
+        count = 0
+        for x in list_word:
+            if x in sen:
+                count +=1
+        if count == length:
+            l = sen.split(' ')
+            for ele in l:
+                if ele in list_word and ele not in new_pattern: 
+                    new_pattern.append(ele)
+    return " ".join(new_pattern)
 
-def do_frequent_pattern_mining(frequent_list,data_list):
+def do_frequent_pattern_mining(frequent_list,data_list,limit):
     dict_count = {} 
     #frequent_list [['a'],['b']]
     for i in range(0,len(frequent_list)):
-        for j in range(i,len(frequent_list)):
+        for j in range(i+1,len(frequent_list)):
             p1 = frequent_list[i]
             p2 = frequent_list[j]
             p = merge_two_list(p1,p2)
+            p.sort()
+            #print "p = "
+            #print p
             if check_all_sub_frequency(p,frequent_list):
-           #     print "true"      
+               #print "true"      
                 hash_frequency(p,data_list,dict_count)               
-    temp = limit_hash_result(dict_count,10)    
+    temp = limit_hash_result(dict_count,limit)    
     new_fre_list = flat_dictkey_into_list(temp)
     return new_fre_list
 
 def merge_list_into_key(item_list):
-    key = " ".join(item_list)
+    c = []
+    copy_list(item_list,c)
+    #item_list.sort()
+    key = " ".join(c)
     return key    
 
 def hash_frequency(potential_list, data_list, dict_count):
@@ -770,6 +926,7 @@ for kw in keywords[1:]:
 for x in keywords:
     print "seed word: " + str(x)
 
+#test_pattern_matching()
 init_seed_word_list() 
 begin_search_google(keywords,url)
 frequent_pattern_mining()
